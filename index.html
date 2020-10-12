@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+<script>
+  let token = null;
+
+  async function register() {
+    const data = {
+      username: 'user',
+      email: 'test@email.com',
+      password: 'testpass',
+    };
+    const response = await fetch('http://localhost:8000/register', {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data),
+    });
+    const result = await response.json();
+    token = result.result.token;
+  }
+
+  async function login() {
+    const data = {
+      username: 'user',
+      password: 'testpass',
+    };
+    const response = await fetch('http://localhost:8000/login', {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: {
+        'Content-Type': 'text/plain'
+      },
+      body: JSON.stringify(data),
+    });
+    const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new TypeError("Ой, мы не получили JSON!");
+      }
+    const result = await response.json();
+    token = result.result.token;
+  }
+
+  function format_jrpc_request({ method, params, id }) {
+    const resp = { jsonrpc: '2.0', params, method, id };
+    return JSON.stringify(resp);
+  }
+
+  function format_jrpc_response({ result, error, id }) {
+    const resp = { jsonrpc: '2.0', result, error, id };
+    return JSON.stringify(resp);
+  }
+
+  class MessageController {
+    constructor(url, token) {
+      this.url = url;
+      this._socket = null;
+      this.token = token;
+    }
+
+    openConnection() {
+      if (this._socket !== null) {
+        return;
+      }
+      this._socket = new WebSocket(this.url);
+      this._socket.onopen = this.onOpen;
+      this._socket.onerror = this.onError;
+      this._socket.onmessage = this.onMessage;
+      this._socket.onclose = this.onClose;
+      console.log('on init conn');
+    }
+
+    onClose = (e) => {
+      if (e.wasClean) {
+        console.log(`[close] Соединение закрыто чисто, код=${e.code} причина=${e.reason}`);
+      } else {
+        console.log(e);
+        console.log('[close] Соединение прервано');
+      }
+      this._socket = null;
+    };
+
+    onError = (e) => {
+      console.dir(e);
+      console.log(`[error] ${e.message}`);
+    };
+
+    onMessage = (e) => {
+      console.log(`[message] ${e.data}`, e);
+    };
+
+    onOpen = (e) => {
+      console.log("[open] Соединение установлено");
+    };
+
+    sendMessage(msg) {
+      // later add limit on message count
+      if (!this._socket) {
+        return;
+      }
+      const data = format_jrpc_request(msg);
+      this._socket.send(data);
+    }
+
+    closeConnection(data) {
+      if(this.isOpen) {
+        this._socket.close(1000, '{"msg": "sorry"}');
+      }
+    }
+
+    get isOpen() {
+      return this._socket !== null;
+    }
+  }
+
+  const messenger =  new MessageController("ws://localhost:8000/ws");
+  messenger.openConnection();
+
+  // register(); on first attempt register
+  login().then(() => {
+    messenger.sendMessage({ id: token, method: 'user.info' });
+    messenger.sendMessage({ id: token, method: 'user.change', params: { level: 2.5, weapons: [1] } });
+  });
+</script>
+</body>
+</html>

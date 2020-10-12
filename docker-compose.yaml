@@ -1,0 +1,49 @@
+version: '3.7'
+
+
+services:
+  postgres:
+    image: postgres:13.0
+    volumes:
+      - "/var/run/postgres/postgres.sock:/var/run/postgres/postgres.sock"
+      - "dbdata:/var/lib/postgresql/data"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=postgres
+    ports:
+      - 5432:5432
+
+  backend:
+    container_name: backend
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/work:delegated
+    ports:
+      - 8000:8000
+    depends_on:
+      - postgres
+      - redis
+#    command: adev runserver backend/__main__.py --app-factory run_app
+#    command: adev runserver backend
+#    command: adev runserver backend --app-factory init_app
+    command: python -m backend
+#    command: ls config
+
+  redis:
+    image: redis:6.0.6-buster
+    hostname: redis
+    volumes:
+      - redis_data:/data
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=redis
+    ports:
+      - "6379:6379"
+
+volumes:
+  dbdata:
+  redis_data:
